@@ -7,12 +7,30 @@ from transformers import GPT2LMHeadModel, GPT2Tokenizer
 import os
 import gdown
 
+# Google Drive file IDs for model files
+# These IDs correspond to files in the Google Drive folder: https://drive.google.com/drive/folders/1nXB7hPbSkn3zwCUT-zegXV0mAR80Wlv-
+GOOGLE_DRIVE_FILE_IDS = {
+    "model.safetensors": "1Fy6cWT7aXPfrraJWP9jfm5T8GtzbeIv-",
+    "config.json": "1-ibDlfGL427TfPlXuomrt8VVsvwht90o",
+    "generation_config.json": "1YDGJBDVUkv26EdqgEUhAtIfmVO44oo7q",
+    "merges.txt": "1JCvmORZ0viVz4O-0pUNqmBw8YTZc0xDz",
+    "special_tokens_map.json": "1fc91SRN9_afQYUH7vZiStgWiJVcCCGa3",
+    "tokenizer_config.json": "1q8WIgHP0WEw3F0g6RR-osxEAkwPnirLd",
+    "vocab.json": "1986ye9dofWUxLaxeoFVNnTF9-RkPtfKB"
+}
+
+# Model directory
+MODEL_DIR = "./gpt2-rasa-finetuned"
+
 # Pre-download NLTK data
 try:
     nltk.data.find('tokenizers/punkt')
+    nltk.data.find('tokenizers/punkt_tab')
     nltk.data.find('corpora/cmudict')
 except LookupError:
+    st.write("Downloading required NLTK data...")
     nltk.download('punkt', quiet=True)
+    nltk.download('punkt_tab', quiet=True)
     nltk.download('cmudict', quiet=True)
 
 # Initialize CMU dictionary
@@ -42,30 +60,25 @@ PHONEME_EMOTION_MAP = {
     'Y': 'excited', 'Z': 'fearful', 'ZH': 'calm'
 }
 
-# Google Drive file IDs for model files
-GOOGLE_DRIVE_FILE_IDS = {
-    "model.safetensors": "1Fy6cWT7aXPfrraJWP9jfm5T8GtzbeIv-",
-    "config.json": "1-ibDlfGL427TfPlXuomrt8VVsvwht90o",
-    "generation_config.json": "1YDGJBDVUkv26EdqgEUhAtIfmVO44oo7q",
-    "merges.txt": "1JCvmORZ0viVz4O-0pUNqmBw8YTZc0xDz",
-    "special_tokens_map.json": "1fc91SRN9_afQYUH7vZiStgWiJVcCCGa3",
-    "tokenizer_config.json": "1q8WIgHP0WEw3F0g6RR-osxEAkwPnirLd",
-    "vocab.json": "1986ye9dofWUxLaxeoFVNnTF9-RkPtfKB"
-}
-
-# Model directory
-MODEL_DIR = "./gpt2-rasa-finetuned"
+# Download model files from Google Drive
+def download_model_files():
+    os.makedirs(MODEL_DIR, exist_ok=True)
+    for file_name, file_id in GOOGLE_DRIVE_FILE_IDS.items():
+        file_path = os.path.join(MODEL_DIR, file_name)
+        if not os.path.exists(file_path):
+            try:
+                st.write(f"Downloading {file_name} from Google Drive...")
+                gdown.download(f"https://drive.google.com/uc?id={file_id}", file_path, quiet=False)
+            except Exception as e:
+                st.error(f"Failed to download {file_name}: {str(e)}")
+                return False
+    return True
 
 # Load fine-tuned GPT-2 model and tokenizer
 @st.cache_resource
 def load_gpt2_model():
-    os.makedirs(MODEL_DIR, exist_ok=True)
-
-    for file_name, file_id in GOOGLE_DRIVE_FILE_IDS.items():
-        file_path = os.path.join(MODEL_DIR, file_name)
-        if not os.path.exists(file_path):
-            gdown.download(f"https://drive.google.com/uc?id={file_id}", file_path, quiet=False)
-
+    if not download_model_files():
+        return None, None
     try:
         tokenizer = GPT2Tokenizer.from_pretrained(MODEL_DIR)
         model = GPT2LMHeadModel.from_pretrained(MODEL_DIR, use_safetensors=True)
@@ -73,14 +86,15 @@ def load_gpt2_model():
             model = model.cuda()
         return tokenizer, model
     except Exception as e:
-        st.error(f"Failed to load model: {str(e)}. Ensure gpt2-rasa-finetuned/ contains all required files.")
+        st.error(f"Failed to load model: {str(e)}. Ensure all model files are correctly downloaded.")
         return None, None
 
+# Generate lore using fine-tuned GPT-2
 def generate_gpt2_lore(name, emotion, bhava, rasa):
     try:
         tokenizer, model = load_gpt2_model()
         if tokenizer is None or model is None:
-            return "Model loading failed. Please check the gpt2-rasa-finetuned/ directory."
+            return "Model loading failed. Please check the model files in Google Drive."
         prompt = f"In a mythical realm, {name} embodies {bhava}, radiating {rasa}. Their name evokes {emotion}. Craft a vivid lore about {name}, blending mysticism and cosmic wonder."
         inputs = tokenizer.encode(prompt, return_tensors="pt")
         if torch.cuda.is_available():
@@ -108,16 +122,20 @@ def get_phonemes(word):
     return cmu_dict.get(word, [[]])[0]
 
 def analyze_name_phonemes(name):
-    phonemes = []
-    for word in word_tokenize(name):
-        phonemes.extend(get_phonemes(word))
-    emotions = [PHONEME_EMOTION_MAP.get(phoneme.split('-')[0], 'calm') for phoneme in phonemes]
-    return max(set(emotions), key=emotions.count) if emotions else 'calm'
+    try:
+        phonemes = []
+        for word in word_tokenize(name):
+            phonemes.extend(get_phonemes(word))
+        emotions = [PHONEME_EMOTION_MAP.get(phoneme.split('-')[0], 'calm') for phoneme in phonemes]
+        return max(set(emotions), key=emotions.count) if emotions else 'calm'
+    except Exception as e:
+        st.error(f"Error analyzing phonemes: {str(e)}")
+        return 'calm'
 
 # Streamlit App
-st.title("Bhava-Chakra-Rasa Lore Generator (A100 Fine-Tuned) by Mahaan")
+st.title("Bhava-Chakra-Rasa Lore Generator (A100 Fine-Tuned)")
 st.markdown("""
-Enter an English name to uncover its phoneme-based emotional essence, mapped to Bhava-Chakra and Rasa, and receive a lore crafted by a fine-tuned GPT-2 model.
+Enter an English name such as Mahan H R Gowda to uncover its phoneme-based emotional essence, mapped to Bhava-Chakra and Rasa, and receive a lore crafted by a fine-tuned GPT-2 model loaded from Google Drive.
 """)
 
 # Input form
@@ -153,5 +171,5 @@ if name_input:
 
 st.markdown("""
 ---
-*Powered by Streamlit, NLTK, and fine-tuned GPT-2. Optimized for Render deployment.*
+*Powered by Streamlit, NLTK, and fine-tuned GPT-2. Optimized for Streamlit Community Cloud.*
 """)
