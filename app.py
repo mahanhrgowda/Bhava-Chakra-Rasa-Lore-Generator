@@ -42,31 +42,33 @@ PHONEME_EMOTION_MAP = {
     'Y': 'excited', 'Z': 'fearful', 'ZH': 'calm'
 }
 
+# Google Drive file IDs for model files
+GOOGLE_DRIVE_FILE_IDS = {
+    "model.safetensors": "1Fy6cWT7aXPfrraJWP9jfm5T8GtzbeIv-",
+    "config.json": "1-ibDlfGL427TfPlXuomrt8VVsvwht90o",
+    "generation_config.json": "1YDGJBDVUkv26EdqgEUhAtIfmVO44oo7q",
+    "merges.txt": "1JCvmORZ0viVz4O-0pUNqmBw8YTZc0xDz",
+    "special_tokens_map.json": "1fc91SRN9_afQYUH7vZiStgWiJVcCCGa3",
+    "tokenizer_config.json": "1q8WIgHP0WEw3F0g6RR-osxEAkwPnirLd",
+    "vocab.json": "1986ye9dofWUxLaxeoFVNnTF9-RkPtfKB"
+}
+
+# Model directory
+MODEL_DIR = "./gpt2-rasa-finetuned"
+
 # Load fine-tuned GPT-2 model and tokenizer
 @st.cache_resource
 def load_gpt2_model():
-    model_dir = "./gpt2-rasa-finetuned"
-    os.makedirs(model_dir, exist_ok=True)
+    os.makedirs(MODEL_DIR, exist_ok=True)
 
-    # Google Drive file IDs (replace with your file IDs)
-    file_ids = {
-        "model.safetensors": "your_model_safetensors_file_id",
-        "config.json": "your_config_json_file_id",
-        "generation_config.json": "your_generation_config_json_file_id",
-        "merges.txt": "your_merges_txt_file_id",
-        "special_tokens_map.json": "your_special_tokens_map_file_id",
-        "tokenizer_config.json": "your_tokenizer_config_json_file_id",
-        "vocab.json": "your_vocab_json_file_id"
-    }
-
-    for file_name, file_id in file_ids.items():
-        file_path = os.path.join(model_dir, file_name)
+    for file_name, file_id in GOOGLE_DRIVE_FILE_IDS.items():
+        file_path = os.path.join(MODEL_DIR, file_name)
         if not os.path.exists(file_path):
             gdown.download(f"https://drive.google.com/uc?id={file_id}", file_path, quiet=False)
 
     try:
-        tokenizer = GPT2Tokenizer.from_pretrained(model_dir)
-        model = GPT2LMHeadModel.from_pretrained(model_dir, use_safetensors=True)
+        tokenizer = GPT2Tokenizer.from_pretrained(MODEL_DIR)
+        model = GPT2LMHeadModel.from_pretrained(MODEL_DIR, use_safetensors=True)
         if torch.cuda.is_available():
             model = model.cuda()
         return tokenizer, model
@@ -113,7 +115,7 @@ def analyze_name_phonemes(name):
     return max(set(emotions), key=emotions.count) if emotions else 'calm'
 
 # Streamlit App
-st.title("Bhava-Chakra-Rasa Lore Generator (A100 Fine-Tuned)")
+st.title("Bhava-Chakra-Rasa Lore Generator (A100 Fine-Tuned) by Mahaan")
 st.markdown("""
 Enter an English name to uncover its phoneme-based emotional essence, mapped to Bhava-Chakra and Rasa, and receive a lore crafted by a fine-tuned GPT-2 model.
 """)
